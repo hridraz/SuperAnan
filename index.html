@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Friend's Adventure</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #2c3e50;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin-top: 50px;
+        }
+        canvas {
+            background-color: #87CEEB; /* Sky blue background */
+            border: 4px solid #34495e;
+            box-shadow: 0px 0px 20px rgba(0,0,0,0.5);
+            border-radius: 10px;
+        }
+        .instructions {
+            margin-top: 15px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Super Friend Bros</h1>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    
+    <div class="instructions">
+        <p><strong>Controls:</strong> Press <strong>SPACE</strong> or <strong>UP ARROW</strong> to jump.</p>
+        <p>Avoid the red obstacles and collect the gold coins!</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- CUSTOM ASSETS ---
+        // The game will look for these files in the same folder as this HTML file.
+        const playerFace = new Image();
+        playerFace.src = 'friend.png'; // Replace with your friend's face image
+        
+        const deathSound = new Audio('death.ogg'); // Replace with your custom sound
+
+        // --- GAME VARIABLES ---
+        let state = 'start'; // 'start', 'playing', 'gameover'
+        let score = 0;
+        let frameCount = 0;
+        
+        const player = {
+            x: 50, y: 300, width: 45, height: 45,
+            dy: 0, gravity: 0.6, jumpPower: -12, grounded: false
+        };
+
+        let obstacles = [];
+        let coins = [];
+
+        // --- INPUT HANDLING ---
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'ArrowUp') {
+                if (state === 'start' || state === 'gameover') {
+                    resetGame();
+                    state = 'playing';
+                    // Play a silent sound to unlock browser audio restrictions
+                    deathSound.play().then(() => { deathSound.pause(); deathSound.currentTime = 0; }).catch(()=>console.log("Audio will load on next interaction"));
+                } else if (state === 'playing' && player.grounded) {
+                    player.dy = player.jumpPower;
+                    player.grounded = false;
+                }
+            }
+        });
+
+        function resetGame() {
+            player.y = 300;
+            player.dy = 0;
+            obstacles = [];
+            coins = [];
+            score = 0;
+            frameCount = 0;
+        }
+
+        function gameOver() {
+            state = 'gameover';
+            deathSound.currentTime = 0; 
+            deathSound.play(); // Play the custom death noise!
+        }
+
+        // --- MAIN GAME LOOP ---
+        function update() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (state === 'start') {
+                drawText("Press SPACE to Start", canvas.width/2 - 140, canvas.height/2, "30px Arial", "black");
+                requestAnimationFrame(update);
+                return;
+            }
+
+            if (state === 'gameover') {
+                drawText("GAME OVER!", canvas.width/2 - 100, canvas.height/2 - 20, "35px Arial", "red");
+                drawText("Score: " + score, canvas.width/2 - 50, canvas.height/2 + 20, "25px Arial", "black");
+                drawText("Press SPACE to Restart", canvas.width/2 - 140, canvas.height/2 + 60, "25px Arial", "black");
+                requestAnimationFrame(update);
+                return;
+            }
+
+            // --- PHYSICS & PLAYER ---
+            player.dy += player.gravity;
+            player.y += player.dy;
+
+            // Floor collision
+            if (player.y + player.height >= 350) {
+                player.y = 350 - player.height;
+                player.dy = 0;
+                player.grounded = true;
+            }
+
+            // Draw Floor
+            ctx.fillStyle = '#27ae60'; // Green grass
+            ctx.fillRect(0, 350, canvas.width, 50);
+
+            // --- SPAWN ENTITIES ---
+            frameCount++;
+            if (frameCount % 100 === 0) { // Spawn obstacle
+                obstacles.push({x: canvas.width, y: 310, width: 30, height: 40});
+            }
+            if (frameCount % 75 === 0) { // Spawn coin
+                coins.push({x: canvas.width, y: 220 + (Math.random() * 50), radius: 15});
+            }
+
+            // --- UPDATE & DRAW OBSTACLES ---
+            ctx.fillStyle = '#c0392b'; // Red block
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i];
+                obs.x -= 5; // Obstacle speed
+                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+
+                // Collision detection
+                if (player.x < obs.x + obs.width &&
+                    player.x + player.width > obs.x &&
+                    player.y < obs.y + obs.height &&
+                    player.y + player.height > obs.y) {
+                    gameOver();
+                }
+
+                if (obs.x + obs.width < 0) obstacles.splice(i, 1);
+            }
+
+            // --- UPDATE & DRAW COINS ---
+            ctx.fillStyle = '#f1c40f'; // Gold
+            for (let i = coins.length - 1; i >= 0; i--) {
+                let coin = coins[i];
+                coin.x -= 3; // Coin speed
+
+                ctx.beginPath();
+                ctx.arc(coin.x, coin.y, coin.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#f39c12';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                ctx.closePath();
+
+                // Coin Collection detection
+                if (player.x < coin.x + coin.radius &&
+                    player.x + player.width > coin.x - coin.radius &&
+                    player.y < coin.y + coin.radius &&
+                    player.y + player.height > coin.y - coin.radius) {
+                    score += 10;
+                    coins.splice(i, 1);
+                    continue;
+                }
+
+                if (coin.x + coin.radius < 0) coins.splice(i, 1);
+            }
+
+            // --- DRAW PLAYER ---
+            if (playerFace.complete && playerFace.naturalHeight !== 0) {
+                // If the image loaded, draw the face
+                ctx.drawImage(playerFace, player.x, player.y, player.width, player.height);
+            } else {
+                // Fallback box if the image is missing
+                ctx.fillStyle = '#2980b9'; 
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+            }
+
+            // --- DRAW SCORE ---
+            drawText("Score: " + score, 20, 40, "24px Arial", "black");
+
+            requestAnimationFrame(update);
+        }
+
+        // Helper to draw text
+        function drawText(text, x, y, font, color) {
+            ctx.fillStyle = color;
+            ctx.font = font;
+            ctx.fillText(text, x, y);
+        }
+
+        // Start the game loop
+        update();
+    </script>
+</body>
+</html>
